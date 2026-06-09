@@ -11,29 +11,26 @@ real.
 <details>
 <summary><b>📋 Presenter walkthrough</b> (suggested order for the talk — click to expand)</summary>
 
-**Before the talk (prep)**
-1. Confirm GPU access: `srun --partition=gpu-node-mig --gres=gpu:1g.16gb:1 nvidia-smi`.
-2. `git pull` + `uv sync` on the cluster so the env is ready for the live demo.
-3. Open this Readme in VS Code preview so the [hardware figures](#the-hardware) render.
+
 
 **Concepts (talk through, ~10 min)**
-4. [What is Slurm](#what-is-slurm) + [the job lifecycle](#the-job-lifecycle) — why a scheduler.
-5. [The hardware](#the-hardware) — walk the figures: cluster → 4× H200 node → MIG slices.
-6. [Basic commands](#basic-commands) + [srun vs. sbatch vs. salloc](#srun-vs-sbatch-vs-salloc) — the mental model.
+1. [What is Slurm](#what-is-slurm) + [the job lifecycle](#the-job-lifecycle) — why a scheduler.
+2. [The hardware](#the-hardware) — walk the figures: cluster → 4× H200 node → MIG slices.
+3. [Basic commands](#basic-commands) + [srun vs. sbatch vs. salloc](#srun-vs-sbatch-vs-salloc) — the mental model.
 
 **Live hands-on (the demo spine)**
-7. [First Connection](#first-connection-to-the-slurm-cluster) — everyone SSHes in.
-8. [Overview over the cluster](#overview-over-the-cluster) — run `sinfo` / `squeue`, tie back to the figures.
-9. [SRUN](#srun--run-something-now) — instant feedback with the pi estimate.
-10. [SBATCH](#sbatch--submit-a-batch-job) + [Logs & output](#logs--output-important) — submit, `squeue --me`, read the log.
-11. [Development workflow](#development-workflow-git-based) — edit → push → pull → `sbatch`.
-12. [Job dependencies](#job-dependencies-build-a-pipeline) — chain step A → step B.
+4. [First Connection](#first-connection-to-the-slurm-cluster) — everyone SSHes in.
+5. [Overview over the cluster](#overview-over-the-cluster) — run `sinfo` / `squeue`, tie back to the figures.
+6. [SRUN](#srun--run-something-now) — instant feedback with the pi estimate.
+7. [SBATCH](#sbatch--submit-a-batch-job) + [Logs & output](#logs--output-important) — submit, `squeue --me`, read the log.
+8. [Development workflow](#development-workflow-git-based) — edit → push → pull → `sbatch`.
+9. [Job dependencies](#job-dependencies-build-a-pipeline) — chain step A → step B.
 
 **Advanced (pick by time)**
-13. [GPU / MIG job](#sbatch--submit-a-batch-job), [Jupyter Lab](#run-jupyter-lab-on-a-compute-node), [requeue + checkpoint](#requeue-after-time-limit-with-checkpointing).
+10. [GPU / MIG job](#sbatch--submit-a-batch-job), [Jupyter Lab](#run-jupyter-lab-on-a-compute-node), [requeue + checkpoint](#requeue-after-time-limit-with-checkpointing).
 
 **Close**
-14. [Being a good cluster citizen](#being-a-good-cluster-citizen).
+11. [Being a good cluster citizen](#being-a-good-cluster-citizen).
 
 > ~45-min cut: steps 4–11 + a GPU job; leave Jupyter/requeue as "explore on your own".
 
@@ -286,6 +283,25 @@ Full files: [`examples/srun_demo.sbatch`](examples/srun_demo.sbatch) (CPU) and
 [`examples/gpu.sbatch`](examples/gpu.sbatch) +
 [`examples/gpu_check.py`](examples/gpu_check.py) (GPU).
 
+#### GPU environment (CUDA build of torch)
+
+A GPU allocation is only half the story — **the `torch` in your env must be a CUDA
+build.** This project pins the **CUDA 12.4** build of torch in `uv.lock` (pulled
+from the PyTorch cu124 index, see [`pyproject.toml`](pyproject.toml)), so a plain
+sync sets everything up. Build the env **once on the cluster login node** (it has
+internet; compute nodes may not):
+
+```bash
+ssh slurm && cd <repo>
+uv sync                        # creates .venv with torch 2.6.0+cu124, numpy, jupyterlab
+```
+
+The GPU example scripts `source .venv/bin/activate` themselves, so once `.venv`
+exists they just work. We activate the prebuilt venv rather than `uv run` inside
+the job, because compute nodes are often offline and `uv run` would try to
+re-resolve over the network. Verify with `sbatch examples/gpu.sbatch`; the log
+should print `torch 2.6.0+cu124  (built for CUDA: 12.4)` and a device name.
+
 ### Logs & output (important!)
 
 A batch job runs detached — you're not watching the terminal — so **its log file
@@ -408,25 +424,26 @@ browser through an SSH tunnel that hops via the login node. Step by step:
    ssh slurm
    ```
 
-2. **Make sure Jupyter is available** in your environment. With this repo's uv
-   project:
+2. **Activate an env with Jupyter** (the same `.venv` from the
+   [GPU environment](#gpu-environment-cuda-build-of-torch) setup, which has both
+   `jupyterlab` and a CUDA torch):
 
    ```bash
    cd slurmtutorial
-   uv sync                  # installs jupyterlab (+ torch) from pyproject.toml
+   source .venv/bin/activate
    ```
-
-   (Or `module load`/activate whatever environment you normally use.)
 
 3. **Launch Jupyter on a compute node.** This grabs a GPU slice and starts the
    server, binding to all interfaces so the tunnel can reach it:
 
    ```bash
    srun --partition=gpu-node-mig --gres=gpu:1 --time=04:00:00 --pty \
-        uv run jupyter lab --no-browser --ip=0.0.0.0 --port=8888
+        bash -c 'source .venv/bin/activate && jupyter lab --no-browser --ip=0.0.0.0 --port=8888'
    ```
 
    No GPU needed? Use `--partition=compute-node` and drop `--gres=gpu:1`.
+   (We activate the prebuilt `.venv` inside the `srun` rather than `uv run`, since
+   the compute node may not have internet to re-resolve the env.)
 
 4. **Note two things from the output:**
    - the **node name** it landed on — run `hostname` in another shell on that

@@ -9,12 +9,12 @@
 #SBATCH --time=00:10:00
 #SBATCH --output=logs/%x-%j.out
 
-# Job pinned to a ~16 GB MIG slice. Submit with:  sbatch gpu_mig_16gb.sbatch
+# Job pinned to a ~16 GB MIG slice. Submit with:  sbatch examples/gpu_mig_16gb.sbatch
 echo "Running on host: $(hostname)"
 nvidia-smi                      # should show a single ~16 GB MIG device
 
-# Activate your environment as appropriate, e.g.:
-# module load cuda
-# source ~/venvs/torch/bin/activate   (or run via: uv run python ...)
+# Activate the prebuilt venv (run `uv sync` on the login node first; it installs
+# the CUDA build of torch). We avoid `uv run` here — compute nodes may be offline.
+[ -f .venv/bin/activate ] && source .venv/bin/activate
 
 srun python examples/gpu_check.py

@@ -7,12 +7,12 @@
 #SBATCH --time=00:10:00
 #SBATCH --output=logs/%x-%j.out
 
-# GPU batch job. Submit with:  sbatch gpu.sbatch
+# GPU batch job. Submit with:  sbatch examples/gpu.sbatch
 echo "Running on host: $(hostname)"
 nvidia-smi || echo "nvidia-smi not found on this node"
 
-# Activate your environment as appropriate, e.g.:
-# module load cuda
-# source ~/venvs/torch/bin/activate
+# Activate the prebuilt venv (run `uv sync` on the login node first; it installs
+# the CUDA build of torch). We avoid `uv run` here — compute nodes may be offline.
+[ -f .venv/bin/activate ] && source .venv/bin/activate
 
 srun python examples/gpu_check.py
