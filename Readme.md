@@ -216,14 +216,31 @@ and [`examples/gpu_mig_16gb.sbatch`](examples/gpu_mig_16gb.sbatch).
 
 ### srun vs. sbatch vs. salloc
 
-Three ways to get work onto a node — pick by how interactive it is:
+All three ask Slurm for resources — they differ in **how you interact with the
+allocation**:
 
-- **`srun`** — run a command now; blocks until it finishes. Good for quick tests
-  and interactive shells.
-- **`sbatch`** — submit a script that runs when a slot frees up. The workhorse
-  for real jobs; you can log off while it runs.
-- **`salloc`** — grab an interactive allocation (a shell on a node) to poke
-  around by hand.
+- **`sbatch`** — submit a *script*; it runs **unattended** when resources free up.
+  You get your prompt back immediately and can log off; output goes to the log
+  file. The workhorse for real jobs.
+- **`salloc`** — get an **interactive allocation**: it drops you into a shell that
+  *holds* the resources, so you run commands by hand. `exit` releases it.
+- **`srun`** — launches a task (a *job step*) **onto** an allocation. What
+  allocation depends on where you run it:
+
+| Where you run `srun`            | What happens                                                       |
+| ------------------------------- | ----------------------------------------------------------------- |
+| inside an `sbatch` script       | a job *step* on the nodes the batch job already holds              |
+| inside an `salloc` shell        | a step on the interactive allocation you're holding               |
+| standalone from the login node  | makes its **own** allocation, runs, blocks, then releases it      |
+
+**`salloc` vs. standalone `srun`** (the confusing pair): `srun --pty bash`
+creates an allocation **and runs one thing in it** (the shell) — when that exits,
+the allocation is gone. `salloc` creates an allocation you **keep**, then you fire
+multiple (or multi-node) `srun` steps against it.
+
+> **Rule of thumb:** `sbatch` for unattended jobs · `salloc` for a multi-step
+> interactive session · `srun` to place work onto an allocation (or a quick
+> one-off).
 
 ### SRUN — run something now
 
@@ -390,6 +407,10 @@ sbatch --dependency=afterok:$jid examples/step_b.sbatch
 
 squeue --me   # step B shows state (Dependency) until A is done
 ```
+
+> Step A deliberately lingers ~90s (a `sleep` after the work) so you have time to
+> run `squeue --me` and watch step B sit in `(Dependency)` until A finishes — drop
+> that `sleep` for real pipelines.
 
 Common dependency types: `afterok` (A succeeded), `afterany` (A finished, any
 result), `afternotok` (A failed). Files:
