@@ -19,7 +19,7 @@ real.
 3. [Basic commands](#basic-commands) + [srun vs. sbatch vs. salloc](#srun-vs-sbatch-vs-salloc) .
 
 **Live hands-on (the demo spine)**
-4. [First Connection](#first-connection-to-the-slurm-cluster) — everyone SSHes in.
+4. [First Connection](#first-connection-to-the-slurm-cluster) — everyone SSHes in, then [project setup](#project-setup-uv--clone) (`uv` + clone + sync).
 5. [Overview over the cluster](#overview-over-the-cluster) — run `sinfo` / `squeue`, tie back to the figures.
 6. [SRUN](#srun--run-something-now) — instant feedback with the pi estimate.
 7. [SBATCH](#sbatch--submit-a-batch-job) + [Logs & output](#logs--output-important) — submit, `squeue --me`, read the log.
@@ -146,6 +146,35 @@ Reading `sinfo`: the `STATE` column tells you what's usable — `idle` (free),
    ```bash
    ssh slurm
    ```
+
+### Project setup (uv + clone)
+
+Now that you're on the login node, set up the project. We use
+[**uv**](https://docs.astral.sh/uv/) to manage the Python environment — it reads
+`pyproject.toml`/`uv.lock` and builds an identical `.venv` for everyone. Run this
+**on the login node** (it has internet; compute nodes may not).
+
+1. **Install uv** (skip if `uv --version` already works):
+
+   ```bash
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   # then restart your shell, or:  source $HOME/.local/bin/env
+   ```
+
+2. **Clone the repo and build the env.** Agent forwarding (the `ForwardAgent yes`
+   from your SSH config) lets the clone authenticate to GitHub with your laptop's
+   key — nothing private is copied onto the cluster:
+
+   ```bash
+   git clone git@github.com:<you>/slurmtutorial.git
+   cd slurmtutorial
+   uv sync                 # creates .venv from pyproject.toml + uv.lock
+   ```
+
+   `uv sync` pulls the pinned **CUDA 12.4** build of torch plus numpy and
+   jupyterlab (see [GPU environment](#gpu-environment-cuda-build-of-torch)). The
+   example scripts `source .venv/bin/activate` themselves, so once `.venv` exists
+   they just work.
 
 ### Overview over the cluster
 
