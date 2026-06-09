@@ -27,7 +27,7 @@ real.
 9. [Job dependencies](#job-dependencies-build-a-pipeline) — chain step A → step B.
 
 **Advanced (pick by time)**
-10. [GPU / MIG job](#sbatch--submit-a-batch-job), [Jupyter Lab](#run-jupyter-lab-on-a-compute-node), [requeue + checkpoint](#requeue-after-time-limit-with-checkpointing).
+10. [GPU / MIG job](#sbatch--submit-a-batch-job), [job arrays](#job-arrays-run-many-similar-jobs), [Jupyter Lab](#run-jupyter-lab-on-a-compute-node), [requeue + checkpoint](#requeue-after-time-limit-with-checkpointing).
 
 **Close**
 11. [Being a good cluster citizen](#being-a-good-cluster-citizen).
@@ -417,6 +417,46 @@ result), `afternotok` (A failed). Files:
 [`examples/step_a.sbatch`](examples/step_a.sbatch),
 [`examples/step_b.sbatch`](examples/step_b.sbatch),
 [`examples/primes.py`](examples/primes.py).
+
+### Job Arrays (run many similar jobs)
+
+When you need to run the *same* job many times with only a small difference each
+time — a parameter sweep, repeated runs with different seeds, or processing a list
+of input shards — don't submit N scripts by hand. A **job array** does it with one
+`sbatch`: Slurm fans the submission out into independent *tasks* that differ only
+by an index, `$SLURM_ARRAY_TASK_ID`.
+
+```bash
+#SBATCH --array=0-4                 # 5 tasks: task ids 0,1,2,3,4
+#SBATCH --output=logs/%x-%A_%a.out  # %A = array job id, %a = task id
+```
+
+Inside the script, read `$SLURM_ARRAY_TASK_ID` to pick this task's work:
+
+```bash
+samples=$(( (SLURM_ARRAY_TASK_ID + 1) * 1000000 ))
+srun python examples/pi_estimate.py "$samples"
+```
+
+Submit and watch the tasks:
+
+```bash
+mkdir -p logs
+sbatch examples/array_job.sbatch
+squeue --me     # tasks appear as <jobid>_0, <jobid>_1, ... scheduled independently
+```
+
+The `--array` spec is flexible: ranges (`0-9`), lists (`1,3,5`), and steps
+(`0-9:2`). Add `%N` to **throttle** how many run at once — `--array=0-19%4` keeps
+at most 4 tasks running simultaneously, which keeps you a good cluster citizen on a
+shared queue.
+
+> Use `%A` (array job id) and `%a` (task id) in `--output` so every task writes its
+> own log instead of clobbering one file. `scancel <jobid>` cancels the whole
+> array; `scancel <jobid>_<taskid>` cancels a single task.
+
+Files: [`examples/array_job.sbatch`](examples/array_job.sbatch),
+[`examples/pi_estimate.py`](examples/pi_estimate.py).
 
 ### Send Mail
 
