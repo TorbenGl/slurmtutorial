@@ -1,0 +1,26 @@
+[project]
+name = "slurmtutorial"
+version = "0.1.0"
+description = "Hands-on Slurm tutorial: runnable example jobs and an intro slide deck."
+readme = "Readme.md"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.2",       # used by examples/gpu_check.py
+    "numpy>=1.24",      # torch interop (silences a startup warning)
+    "jupyterlab>=4.0",  # used by the "Run Jupyter" section
+]
+
+# The pi/primes/checkpoint examples are pure stdlib and need no dependencies.
+
+# --- torch wheel selection -------------------------------------------------
+# By default uv pulls the platform-appropriate torch from PyPI. To force a
+# specific build, point uv at a PyTorch index:
+#
+#   CPU-only (e.g. a laptop / CPU login node):
+#     uv sync --index https://download.pytorch.org/whl/cpu
+#
+#   CUDA 12.1 (matches many GPU nodes; check `nvidia-smi` on the node):
+#     uv sync --index https://download.pytorch.org/whl/cu121
+#
+# Reproduce this environment anywhere (laptop or cluster) with:  uv sync
+[tool.uv]

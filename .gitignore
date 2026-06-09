@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.py[cod]
+.python-version
+*.egg-info/
+.ipynb_checkpoints/
+.DS_Store
