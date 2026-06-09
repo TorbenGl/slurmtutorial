@@ -16,7 +16,7 @@ real.
 **Concepts (talk through, ~10 min)**
 1. [What is Slurm](#what-is-slurm) + [the job lifecycle](#the-job-lifecycle) — why a scheduler.
 2. [The hardware](#the-hardware) — walk the figures: cluster → 4× H200 node → MIG slices.
-3. [Basic commands](#basic-commands) + [srun vs. sbatch vs. salloc](#srun-vs-sbatch-vs-salloc) — the mental model.
+3. [Basic commands](#basic-commands) + [srun vs. sbatch vs. salloc](#srun-vs-sbatch-vs-salloc) .
 
 **Live hands-on (the demo spine)**
 4. [First Connection](#first-connection-to-the-slurm-cluster) — everyone SSHes in.
@@ -424,20 +424,24 @@ Let Slurm email you when a job changes state:
 
 ```bash
 #SBATCH --mail-type=BEGIN,END,FAIL              # or ALL
-#SBATCH --mail-user=torben.globisch@uni-rostock.de
+#SBATCH --mail-user=<your-email>
 ```
 
 Quick demo — fire a one-line job and watch the BEGIN/END mails land:
 
 ```bash
-sbatch --mail-type=ALL --mail-user=torben.globisch@uni-rostock.de \
+sbatch --mail-type=ALL --mail-user=<your-email> \
        --partition=compute-node --time=00:01:00 --wrap="echo hello from \$(hostname); sleep 10"
 ```
 
 ### Run Jupyter Lab on a compute node
 
 The idea: Jupyter runs on a **compute node**, and you reach it from your laptop's
-browser through an SSH tunnel that hops via the login node. Step by step:
+browser through an SSH tunnel. We use a **reverse tunnel** — the compute node
+pushes its port *back* to the login node, then your laptop forwards from the login
+node. This works even when the login node can't reach the compute node directly (a
+firewall between login and compute nodes is common, and a plain `-L
+8888:<node>:8888` tunnel then fails). Step by step:
 
 1. **SSH into the cluster:**
 
@@ -454,29 +458,32 @@ browser through an SSH tunnel that hops via the login node. Step by step:
    source .venv/bin/activate
    ```
 
-3. **Launch Jupyter on a compute node.** This grabs a GPU slice and starts the
-   server, binding to all interfaces so the tunnel can reach it:
+3. **Launch Jupyter on a compute node and push its port to the login node.** This
+   grabs a GPU slice, opens a reverse tunnel back to the login node (`sl-li`), and
+   starts the server bound to localhost (only the tunnels can reach it):
 
    ```bash
-   srun --partition=gpu-node-mig --gres=gpu:1 --time=04:00:00 --pty \
-        bash -c 'source .venv/bin/activate && jupyter lab --no-browser --ip=0.0.0.0 --port=8888'
+   srun --partition=gpu-node-mig --gres=gpu:1 --time=04:00:00 --pty bash -c '
+     source .venv/bin/activate
+     ssh -fN -R 8888:localhost:8888 sl-li          # push port back to login node
+     jupyter lab --no-browser --ip=127.0.0.1 --port=8888
+   '
    ```
 
    No GPU needed? Use `--partition=compute-node` and drop `--gres=gpu:1`.
    (We activate the prebuilt `.venv` inside the `srun` rather than `uv run`, since
    the compute node may not have internet to re-resolve the env.)
 
-4. **Note two things from the output:**
-   - the **node name** it landed on — run `hostname` in another shell on that
-     allocation, or read it from the prompt (e.g. `node201`);
-   - the **token URL** it prints, like
-     `http://127.0.0.1:8888/lab?token=abc123...`.
+4. **Copy the token URL** it prints, like
+   `http://127.0.0.1:8888/lab?token=abc123...`. With the reverse tunnel you no
+   longer need the node name — the port is already on the login node.
 
 5. **Open the tunnel from your laptop** (new terminal, *not* on the cluster). This
-   forwards local port 8888 to the compute node, hopping through the login node:
+   forwards your local port 8888 to the login node, which already has the port from
+   the reverse tunnel:
 
    ```bash
-   ssh -N -L 8888:<node>:8888 slurm     # e.g. 8888:node201:8888
+   ssh -N -L 8888:localhost:8888 slurm
    ```
 
    Leave this running.
@@ -485,10 +492,13 @@ browser through an SSH tunnel that hops via the login node. Step by step:
    local address — `http://localhost:8888/lab?token=abc123...`.
 
 7. **When you're done:** `Ctrl-C` the `srun` session on the cluster (this ends the
-   job and frees the GPU), then `Ctrl-C` the tunnel on your laptop.
+   job, frees the GPU, and tears down the reverse tunnel), then `Ctrl-C` the tunnel
+   on your laptop.
 
-> **Tip:** if port 8888 is already taken, pick another (e.g. `8889`) and use it
-> consistently in steps 3, 5, and 6.
+> **Tip:** the reverse-tunnel port (`8888` here) lives on the **shared login
+> node**, so if someone else is already using it your `ssh -R` will silently fail
+> to bind. Pick a unique port (e.g. `8900` + your favourite number) and use it
+> consistently in the `-R`, the `--port`, and your laptop's `-L`.
 
 ### Requeue after time limit (with checkpointing)
 
