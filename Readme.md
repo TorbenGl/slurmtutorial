@@ -145,7 +145,7 @@ The `TIMELIMIT` column (`1-00:00:00` = 1 day) is the **max** wall-clock a job ma
 request on that partition — ask for more and it's rejected.
 
 Our partitions: **`compute-node`** (CPU jobs), **`gpu-node-mig`** (small GPU
-slices via MIG — great for tutorials/dev), and **`gpu-node`** / **`gpu-node-bw`**
+slices via MIG — great for tutorials/dev), and **`gpu-node`** 
 (full GPUs for heavier work). Examples below use `compute-node` and
 `gpu-node-mig`.
 
@@ -153,8 +153,9 @@ slices via MIG — great for tutorials/dev), and **`gpu-node`** / **`gpu-node-bw
 
 ![Cluster overview](figures/ClusterOverview.svg)
 
-- **GPU nodes** (`gpu-node`, `gpu-node-bw`) — each node has **4× NVIDIA H200**
-  GPUs. Use these for full-GPU training and heavier work.
+- **GPU nodes** (`gpu-node`) — each node has **4× NVIDIA H200** GPUs. Use these
+  for full-GPU training and heavier work.
+- **GPU nodes** (`gpu-node-bw`) — each node has **NVIDIA B6000 RTX** GPUs.
 - **MIG node** (`gpu-node-mig`, `node201`) — **2× H200** sliced with MIG
   (Multi-Instance GPU) into smaller, independent GPUs:
   - one H200 → **4 slices of ~33 GB** each,
@@ -173,12 +174,13 @@ slices via MIG — great for tutorials/dev), and **`gpu-node`** / **`gpu-node-bw
 Requesting MIG slices on `gpu-node-mig`:
 
 - **Any** slice — just `--gres=gpu:1`; Slurm hands you whichever is free.
-- A **specific size** — name the MIG profile: `--gres=gpu:3g.33gb:1` (≈33 GB) or
-  `--gres=gpu:1g.16gb:1` (≈16 GB). Confirm the exact type strings for your node
-  with:
+- A **specific size** — name the MIG type: `--gres=gpu:1g.33gb:1` (≈33 GB, 4
+  available) or `--gres=gpu:1g.16gb:1` (≈16 GB, 7 available). The type strings
+  come from the node's GRES config:
 
   ```bash
   scontrol show node node201 | grep -i Gres
+  # Gres=gpu:1g.33gb:4,gpu:1g.16gb:7
   ```
 
 Ready-made scripts: [`examples/gpu_mig_33gb.sbatch`](examples/gpu_mig_33gb.sbatch)
@@ -252,6 +254,49 @@ cat logs/pi-demo-*.out        # read the output when done
 Full files: [`examples/srun_demo.sbatch`](examples/srun_demo.sbatch) (CPU) and
 [`examples/gpu.sbatch`](examples/gpu.sbatch) +
 [`examples/gpu_check.py`](examples/gpu_check.py) (GPU).
+
+---
+
+## Development Workflow (git-based)
+
+Don't edit code directly on the cluster. Develop and test on your laptop, push to
+git, and pull on the cluster — the cluster just *runs* what's in git. This keeps
+your laptop and the cluster in sync and your history clean.
+
+```
+laptop:  edit + test  →  git commit  →  git push
+                                            │
+cluster:                          git pull  →  sbatch  →  read logs
+```
+
+**One-time setup on the cluster** (uses agent forwarding from your SSH config, so
+your laptop's key authenticates to GitHub — nothing private is copied over):
+
+```bash
+ssh slurm
+git clone git@github.com:<you>/<repo>.git
+cd <repo>
+uv sync                      # reproduce the Python env from pyproject.toml
+```
+
+**Each iteration:**
+
+```bash
+# 1. On your laptop: make changes, test quickly, then publish
+git add -A && git commit -m "tweak training step"
+git push
+
+# 2. On the cluster: pull and submit
+ssh slurm
+cd <repo>
+git pull
+sbatch examples/srun_demo.sbatch
+squeue --me                  # watch it
+cat logs/*.out               # inspect results, then repeat
+```
+
+> **Tip:** keep `logs/` and any large outputs out of git (add them to
+> `.gitignore`) — commit code, not run artifacts.
 
 ---
 
@@ -374,16 +419,6 @@ The cluster is shared — a few habits keep it pleasant for everyone:
 - **Pick the right partition** — `compute-node` for CPU work, `gpu-node-mig` for
   small/dev GPU jobs, `gpu-node` / `gpu-node-bw` for heavier GPU runs.
 
----
 
-## Including Figures
 
-Put overview images in [`figures/`](figures/) and reference them with relative
-paths so they work anywhere the repo is cloned. Standard markdown image syntax:
 
-```markdown
-![Cluster overview](figures/cluster-overview.png)
-```
-
-PNG works everywhere for screenshots; SVG stays crisp when zoomed, ideal for
-diagrams.

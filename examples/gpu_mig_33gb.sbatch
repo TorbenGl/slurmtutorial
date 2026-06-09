@@ -1,11 +1,9 @@
 #!/bin/bash
 #SBATCH --job-name=mig-33gb
 #SBATCH --partition=gpu-node-mig
-#SBATCH --gres=gpu:3g.33gb:1     # one ~33 GB MIG slice
-#                ^^^^^^^^^^^ MIG profile/type name. Confirm the exact string with:
-#                    scontrol show node node201 | grep -i Gres
-#                e.g. it may print  Gres=gpu:3g.33gb:4,gpu:1g.16gb:7
-#                If yours differs, edit the type on the --gres line above.
+#SBATCH --gres=gpu:1g.33gb:1     # one ~33 GB MIG slice (node201 has 4 of these)
+#                ^^^^^^^^^^^ MIG type name, from: scontrol show node node201
+#                    Gres=gpu:1g.33gb:4,gpu:1g.16gb:7
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=8G
 #SBATCH --time=00:10:00
