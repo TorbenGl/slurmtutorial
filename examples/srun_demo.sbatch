@@ -10,4 +10,4 @@
 echo "Running on host: $(hostname)"
 echo "Job $SLURM_JOB_ID on partition $SLURM_JOB_PARTITION"
 
-srun python pi_estimate.py 5000000
+srun python examples/pi_estimate.py 5000000

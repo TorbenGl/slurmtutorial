@@ -8,6 +8,37 @@ real.
 > **Conventions:** angle-bracket placeholders like `<your-username>` need to be
 > replaced with your real values.
 
+<details>
+<summary><b>📋 Presenter walkthrough</b> (suggested order for the talk — click to expand)</summary>
+
+**Before the talk (prep)**
+1. Confirm GPU access: `srun --partition=gpu-node-mig --gres=gpu:1g.16gb:1 nvidia-smi`.
+2. `git pull` + `uv sync` on the cluster so the env is ready for the live demo.
+3. Open this Readme in VS Code preview so the [hardware figures](#the-hardware) render.
+
+**Concepts (talk through, ~10 min)**
+4. [What is Slurm](#what-is-slurm) + [the job lifecycle](#the-job-lifecycle) — why a scheduler.
+5. [The hardware](#the-hardware) — walk the figures: cluster → 4× H200 node → MIG slices.
+6. [Basic commands](#basic-commands) + [srun vs. sbatch vs. salloc](#srun-vs-sbatch-vs-salloc) — the mental model.
+
+**Live hands-on (the demo spine)**
+7. [First Connection](#first-connection-to-the-slurm-cluster) — everyone SSHes in.
+8. [Overview over the cluster](#overview-over-the-cluster) — run `sinfo` / `squeue`, tie back to the figures.
+9. [SRUN](#srun--run-something-now) — instant feedback with the pi estimate.
+10. [SBATCH](#sbatch--submit-a-batch-job) + [Logs & output](#logs--output-important) — submit, `squeue --me`, read the log.
+11. [Development workflow](#development-workflow-git-based) — edit → push → pull → `sbatch`.
+12. [Job dependencies](#job-dependencies-build-a-pipeline) — chain step A → step B.
+
+**Advanced (pick by time)**
+13. [GPU / MIG job](#sbatch--submit-a-batch-job), [Jupyter Lab](#run-jupyter-lab-on-a-compute-node), [requeue + checkpoint](#requeue-after-time-limit-with-checkpointing).
+
+**Close**
+14. [Being a good cluster citizen](#being-a-good-cluster-citizen).
+
+> ~45-min cut: steps 4–11 + a GPU job; leave Jupyter/requeue as "explore on your own".
+
+</details>
+
 ---
 
 ## What is Slurm
@@ -255,6 +286,31 @@ Full files: [`examples/srun_demo.sbatch`](examples/srun_demo.sbatch) (CPU) and
 [`examples/gpu.sbatch`](examples/gpu.sbatch) +
 [`examples/gpu_check.py`](examples/gpu_check.py) (GPU).
 
+### Logs & output (important!)
+
+A batch job runs detached — you're not watching the terminal — so **its log file
+is your only window into what happened.** Always set `--output`, and check it.
+
+- `#SBATCH --output=logs/%x-%j.out` captures **stdout**. The `%x` (job name) and
+  `%j` (job id) placeholders keep files unique so jobs don't overwrite each other.
+  Without `--output`, Slurm dumps everything into `slurm-<jobid>.out` in your
+  current directory — easy to lose track of.
+- `#SBATCH --error=logs/%x-%j.err` sends **stderr** to a separate file. Handy for
+  spotting failures fast; omit it and stderr is merged into the `.out`.
+- The `logs/` directory **must exist first** — `mkdir -p logs` before submitting.
+- **Watch a running job live:**
+
+  ```bash
+  tail -f logs/pi-demo-12345.out
+  ```
+
+- In Python, `print(..., flush=True)` (or `python -u`) so progress shows up in the
+  log immediately instead of being buffered until the job ends — see
+  [`examples/checkpoint.py`](examples/checkpoint.py).
+
+When a job fails, the log is the **first** place to look (`sacct -j <jobid>` tells
+you the exit state; the log tells you *why*).
+
 ---
 
 ## Development Workflow (git-based)
@@ -330,8 +386,15 @@ result), `afternotok` (A failed). Files:
 Let Slurm email you when a job changes state:
 
 ```bash
-#SBATCH --mail-type=BEGIN,END,FAIL   # or ALL
-#SBATCH --mail-user=<you>@example.com
+#SBATCH --mail-type=BEGIN,END,FAIL              # or ALL
+#SBATCH --mail-user=torben.globisch@uni-rostock.de
+```
+
+Quick demo — fire a one-line job and watch the BEGIN/END mails land:
+
+```bash
+sbatch --mail-type=ALL --mail-user=torben.globisch@uni-rostock.de \
+       --partition=compute-node --time=00:01:00 --wrap="echo hello from \$(hostname); sleep 10"
 ```
 
 ### Run Jupyter Lab on a compute node

@@ -15,4 +15,4 @@ nvidia-smi || echo "nvidia-smi not found on this node"
 # module load cuda
 # source ~/venvs/torch/bin/activate
 
-srun python gpu_check.py
+srun python examples/gpu_check.py

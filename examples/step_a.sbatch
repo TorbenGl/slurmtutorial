@@ -8,4 +8,4 @@
 
 # Step A of a pipeline: produces primes_result.txt that step B consumes.
 echo "Step A computing primes..."
-srun python primes.py 2000000 primes_result.txt
+srun python examples/primes.py 2000000 primes_result.txt

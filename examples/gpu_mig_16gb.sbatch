@@ -17,4 +17,4 @@ nvidia-smi                      # should show a single ~16 GB MIG device
 # module load cuda
 # source ~/venvs/torch/bin/activate   (or run via: uv run python ...)
 
-srun python gpu_check.py
+srun python examples/gpu_check.py
