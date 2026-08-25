@@ -621,6 +621,31 @@ firewall between login and compute nodes is common, and a plain `-L
 > to bind. Pick a unique port (e.g. `8900` + your favourite number) and use it
 > consistently in the `-R`, the `--port`, and your laptop's `-L`.
 
+### Develop directly on a compute node
+
+You need a job running on a compute node before you are able to open an ssh connection to the node.
+
+To handle this automatically, add this to your local ssh config (in addition to the host config for `slurm` above):
+
+```
+Host slurm-dev
+    HostName slurm-dev
+    User <your-uni-info-username>
+    ProxyCommand ssh slurm "bash -l -c ~/scripts/vscode-slurm-connect.sh"
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+    ControlMaster auto
+    ControlPersist 10m
+```
+
+... and copy the files `scripts/vscode-slurm-connect.sh` and `scripts/vscode-dev.sbatch` to `~/scripts/`.
+
+The bash script called `vscode-slurm-connect.sh` ensures that a job is running on a compute node and is called by ssh on connection due to the `ProxyCommand` setting.
+The sbatch script called `vscode-dev.sbatch` defines the job that will be started on a compute node for you to connect to, including a definition for the resources that job should have.
+This job just idles and stops automatically after some time when you have no ssh connection to the node anymore.
+
+All in all, this setup allows you to point VSCode directly to the `slurm-dev` host in the remote-ssh extension and connect without any additional manual steps per connect.
+
 ### Requeue after time limit (with checkpointing)
 
 For jobs longer than the partition's time limit, checkpoint progress and have
