@@ -28,11 +28,12 @@ real.
 
 **Advanced (pick by time)**
 10. [GPU / MIG job](#sbatch--submit-a-batch-job), [job arrays](#job-arrays-run-many-similar-jobs), [Jupyter Lab](#run-jupyter-lab-on-a-compute-node), [requeue + checkpoint](#requeue-after-time-limit-with-checkpointing).
+11. [Project template](#project-template-from-notebook-to-gpu-web-app) — Examples 1–3: uv web app → SSH setup → app as a MIG job.
 
 **Close**
-11. [Being a good cluster citizen](#being-a-good-cluster-citizen).
+12. [Being a good cluster citizen](#being-a-good-cluster-citizen).
 
-> ~45-min cut: steps 4–11 + a GPU job; leave Jupyter/requeue as "explore on your own".
+> ~45-min cut: steps 4–12 + a GPU job; leave Jupyter/requeue/project template as "explore on your own".
 
 </details>
 
@@ -636,6 +637,75 @@ The Python side traps the signal, writes a checkpoint, and exits cleanly so the
 requeued run can pick up where it stopped. Files:
 [`examples/requeue.sbatch`](examples/requeue.sbatch),
 [`examples/checkpoint.py`](examples/checkpoint.py).
+
+---
+
+## Project Template: from Notebook to GPU Web App
+
+Three examples that build on each other — the path from a Jupyter prototype on
+your laptop to the same code running as a web app on a GPU slice, opened in
+your laptop's browser. Copy [`examples/webapp/`](examples/webapp/) as the
+starting point for your own project; its
+[README](examples/webapp/README.md) has the details.
+
+### Example 1 — uv web app
+
+[`examples/webapp/`](examples/webapp/) is a complete uv project: notebook code
+split into plain functions ([`segment.py`](examples/webapp/src/seg_demo/segment.py)),
+a small FastAPI web layer ([`app.py`](examples/webapp/src/seg_demo/app.py)), and a
+`pyproject.toml` that turns it into one command:
+
+```bash
+cd examples/webapp
+uv sync
+uv run seg-demo                 # -> http://127.0.0.1:8000
+uv run seg-demo --data-dir /some/dir --port 8001
+```
+
+Everything the app reads and writes lives under `--data-dir` (`inputs/`,
+`uploads/`, `results/`), so on the cluster you point it at your storage.
+
+### Example 2 — SSH keys, done by a script
+
+The [First Connection](#first-connection-to-the-slurm-cluster) steps as one
+re-runnable script, plus the one extra key the GPU jobs need:
+
+```bash
+# on your laptop (Linux/macOS/WSL/Git Bash):
+bash examples/ssh/setup_ssh.sh <your-uni-username>
+# on your laptop (Windows PowerShell):
+powershell -ExecutionPolicy Bypass -File examples\ssh\setup_ssh.ps1 -User <your-uni-username>
+
+# once on the cluster: lets jobs open a tunnel back to the login node
+ssh slurm
+bash slurmtutorial/examples/ssh/setup_cluster_key.sh
+```
+
+`setup_ssh` creates the key, installs it on `sl-li`, writes the `Host slurm`
+block and prints the public key for GitHub. `setup_cluster_key` first tests
+whether a job can already reach the login node; only if not, it creates a
+cluster-only key that is restricted to port forwarding.
+
+### Example 3 — `run_slurm.sh`: the app on a 33 GB MIG slice
+
+[`examples/webapp/run_slurm.sh`](examples/webapp/run_slurm.sh) is the
+[Jupyter recipe](#run-jupyter-lab-on-a-compute-node) as a batch job: it requests
+`--partition=gpu-node-mig --gres=gpu:1g.33gb:1`, opens the reverse tunnel to the
+login node, and starts the app on `127.0.0.1`.
+
+```bash
+cd examples/webapp && uv sync   # on the login node, once
+mkdir -p logs
+sbatch run_slurm.sh
+cat logs/seg-demo-<jobid>.out   # once running: prints the ssh -L command for your laptop
+```
+
+```
+laptop ──(ssh -L)──▶ login node sl-li ◀──(ssh -R)── compute node: seg-demo on 127.0.0.1:<port>
+```
+
+The port is derived from your uid, so several people can run the app at the
+same time without clashing on the login node. `scancel <jobid>` stops it.
 
 ---
 

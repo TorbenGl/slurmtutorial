@@ -1,0 +1,44 @@
+# Example 1 — a notebook prototype turned into a uv project.
+#
+# Created with `uv init --package seg-demo` and then edited. Everything the
+# project needs is declared here, so on any machine
+#
+#     uv sync          # build .venv from this file (+ uv.lock)
+#     uv run seg-demo  # start the web app (the [project.scripts] entry below)
+#
+# gives you the same environment.
+
+[project]
+name = "seg-demo"
+version = "0.1.0"
+description = "Example 1: a notebook prototype turned into a uv-managed web app (FastAPI + PyTorch)."
+readme = "README.md"
+requires-python = ">=3.10,<3.14"   # torch 2.6 (cu124) has no wheels for 3.14 yet
+dependencies = [
+    "fastapi>=0.110",           # web framework (routes, JSON, file uploads)
+    "uvicorn>=0.29",            # the server that actually runs the FastAPI app
+    "python-multipart>=0.0.9",  # FastAPI needs this to parse file uploads
+    "pillow>=10.0",             # image I/O
+    "numpy>=1.24",
+    "torch>=2.2",               # the "model" — runs on the GPU if one is visible
+]
+
+# `uv run seg-demo` calls seg_demo.app:main(). This is what replaces
+# "Run All Cells" in the notebook.
+[project.scripts]
+seg-demo = "seg_demo.app:main"
+
+[build-system]
+requires = ["uv_build>=0.8.0,<0.12"]
+build-backend = "uv_build"
+
+# --- torch: CUDA 12.4 build on Linux (the cluster), plain PyPI elsewhere -----
+# Same pin as the tutorial's root pyproject.toml. On a Windows/macOS laptop you
+# get the small CPU build from PyPI, which is enough to develop and test locally.
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu124", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true

@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>seg-demo</title>
+  <style>
+    :root {
+      --bg: #f6f7f9; --card: #ffffff; --text: #1d2330; --muted: #667085;
+      --border: #e3e6eb; --accent: #1f6feb; --accent-text: #ffffff; --error: #c62828;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #11151c; --card: #1a2029; --text: #e6e9ef; --muted: #98a2b3;
+        --border: #2b3340; --accent: #4c8dff; --accent-text: #0b0f15; --error: #ff6b6b;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text);
+           font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    main { max-width: 1000px; margin: 0 auto; padding: 24px 16px 48px; }
+    h1 { margin: 0; font-size: 22px; }
+    h2 { font-size: 16px; margin: 0 0 12px; }
+    .muted { color: var(--muted); font-size: 13px; }
+    code { font-size: 12.5px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+            padding: 16px; margin-top: 16px; }
+    .row { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; }
+    label { display: flex; gap: 8px; align-items: center; }
+    select, input[type=file] { max-width: 100%; color: var(--text); }
+    select { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; }
+    button { background: var(--accent); color: var(--accent-text); border: 0; border-radius: 6px;
+             padding: 8px 18px; font-weight: 600; cursor: pointer; }
+    button:disabled { opacity: .5; cursor: wait; }
+    #status.error { color: var(--error); }
+    .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .pair figure, .grid figure { margin: 0; }
+    figure img { width: 100%; border-radius: 6px; border: 1px solid var(--border); display: block; }
+    figcaption { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+    .grid figure { cursor: pointer; }
+    @media (max-width: 600px) { .pair { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>seg-demo</h1>
+  <div id="info" class="muted">connecting…</div>
+
+  <section class="card">
+    <h2>Segment an image</h2>
+    <form id="form" class="row">
+      <label>Upload <input type="file" id="file" accept="image/*,.tif,.tiff"></label>
+      <label>or from <code>inputs/</code>
+        <select id="input"><option value="">—</option></select>
+      </label>
+      <label>clusters k = <input type="range" id="k" min="2" max="12" value="4"><b id="kval">4</b></label>
+      <button id="go" type="submit">Segment</button>
+      <span id="status" class="muted"></span>
+    </form>
+  </section>
+
+  <section class="card" id="result" hidden>
+    <h2>Result</h2>
+    <div class="pair">
+      <figure><img id="r-input" alt="input"><figcaption>input</figcaption></figure>
+      <figure><img id="r-overlay" alt="overlay"><figcaption id="r-meta"></figcaption></figure>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Recent results <span class="muted">(saved in <code>results/</code>)</span></h2>
+    <div id="recent" class="grid"><span class="muted">none yet</span></div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+async function getJSON(url, opts) {
+  const res = await fetch(url, opts);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.detail || res.statusText);
+  return body;
+}
+
+function show(meta) {
+  $("r-input").src = meta.input;
+  $("r-overlay").src = meta.overlay;
+  $("r-meta").innerHTML =
+    `${meta.source} · k=${meta.k} · ${meta.size.join("×")} px · ${meta.seconds}s on ${meta.device}` +
+    ` · <a href="${meta.labels}" download>labels.png</a>`;
+  $("result").hidden = false;
+}
+
+async function loadInfo() {
+  const i = await getJSON("/api/info");
+  const job = i.slurm_job_id ? ` · job ${i.slurm_job_id}` : "";
+  $("info").innerHTML = `running on <b>${i.host}</b>${job} · ${i.device} · data: <code>${i.data_dir}</code>`;
+}
+
+async function loadInputs() {
+  const names = await getJSON("/api/inputs");
+  for (const n of names) $("input").add(new Option(n, n));
+}
+
+async function loadRecent() {
+  const items = await getJSON("/api/results");
+  if (!items.length) return;
+  $("recent").replaceChildren(...items.map((m) => {
+    const fig = document.createElement("figure");
+    fig.innerHTML = `<img src="${m.overlay}" alt="${m.id}" loading="lazy"><figcaption>${m.source}</figcaption>`;
+    fig.onclick = () => show(m);
+    return fig;
+  }));
+}
+
+$("k").oninput = () => ($("kval").textContent = $("k").value);
+
+$("form").onsubmit = async (e) => {
+  e.preventDefault();
+  const form = new FormData();
+  form.append("k", $("k").value);
+  if ($("file").files[0]) form.append("file", $("file").files[0]);
+  else if ($("input").value) form.append("input_name", $("input").value);
+  else { $("status").textContent = "choose a file or an input first"; return; }
+
+  $("go").disabled = true;
+  $("status").className = "muted";
+  $("status").textContent = "segmenting…";
+  try {
+    const meta = await getJSON("/api/segment", { method: "POST", body: form });
+    show(meta);
+    $("status").textContent = `done in ${meta.seconds}s`;
+    loadRecent();
+  } catch (err) {
+    $("status").className = "error";
+    $("status").textContent = err.message;
+  } finally {
+    $("go").disabled = false;
+  }
+};
+
+loadInfo().catch((e) => ($("info").textContent = "server not reachable: " + e.message));
+loadInputs();
+loadRecent();
+</script>
+</body>
+</html>
