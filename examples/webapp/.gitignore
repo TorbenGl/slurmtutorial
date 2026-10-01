@@ -1,0 +1,5 @@
+# Run artifacts stay out of git — commit code, not data.
+data/
+logs/
+.venv/
+__pycache__/
