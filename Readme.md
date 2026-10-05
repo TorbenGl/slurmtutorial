@@ -555,6 +555,16 @@ sbatch --mail-type=ALL --mail-user=<your-email> \
        --partition=compute-node --time=00:01:00 --wrap="echo hello from \$(hostname); sleep 10"
 ```
 
+### Run Jupyter Lab on a compute node (skripted fo dummys)
+
+Notebooks are their own topic — see **[JupyterScript.md](JupyterScript.md)**. Short version:
+on the login node, run `./examples/jupyter.sh` (add `--gpu` for a MIG slice) and
+follow the tunnel command it prints. That guide also covers specialized and
+shared kernel environments.
+
+Scripts: [`examples/jupyter.sh`](examples/jupyter.sh),
+[`examples/jupyter.sbatch`](examples/jupyter.sbatch).
+
 ### Run Jupyter Lab on a compute node
 
 The idea: Jupyter runs on a **compute node**, and you reach it from your laptop's
